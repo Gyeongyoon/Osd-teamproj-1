@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+._*
+
+# xv6 build artifacts
+*.o
+*.d
+*.asm
+*.sym
+bootblock
+entryother
+initcode
+fs.img
+xv6.img
+mkfs
+.gdbinit
