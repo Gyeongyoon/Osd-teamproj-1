@@ -146,6 +146,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->nice = 20;
   return p;
 }
 
@@ -687,4 +688,96 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+
+int
+getnice(int pid)
+{
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      int nice = p->nice;
+      release(&p->lock);
+      return nice;
+    }
+    release(&p->lock);
+  }
+  
+  return -1;
+}
+
+int
+setnice(int pid, int value)
+{
+  struct proc *p;
+
+  if(value < 0 || value > 39)
+    return -1;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      p->nice = value;
+      release(&p->lock);
+      return 0;
+    }
+    release(&p->lock);
+  }
+
+  return -1;
+}
+
+void
+ps(int pid)
+{
+  struct proc *p;
+
+  printf("name\t pid\t state\t\t priority\n");
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(pid == 0 || p->pid == pid) {
+      if(p->state == UNUSED) {
+        release(&p->lock);
+        continue;
+      }
+      char *state;
+      if(p->state == SLEEPING)      state = "SLEEPING";
+      else if(p->state == RUNNABLE) state = "RUNNABLE";
+      else if(p->state == RUNNING)  state = "RUNNING";
+      else if(p->state == ZOMBIE)   state = "ZOMBIE";
+      else                          state = "USED";
+
+      printf("%s\t %d\t %s\t %d\n", p->name, p->pid, state, p->nice);
+    }
+    release(&p->lock);
+  }
+}
+
+int
+waitpid(int pid)
+{
+  struct proc *p;
+  struct proc *curr = myproc();
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      if(p->parent != curr) {
+        release(&p->lock);
+        return -1;
+      }
+      while(p->state != ZOMBIE && p->state != UNUSED) {
+        sleep(curr, &p->lock);
+      }
+      release(&p->lock);
+      return 0;
+    }
+    release(&p->lock);
+  }
+
+  return -1;
 }
