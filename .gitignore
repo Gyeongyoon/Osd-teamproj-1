@@ -12,5 +12,4 @@ entryother
 initcode
 fs.img
 xv6.img
-mkfs
 .gdbinit
