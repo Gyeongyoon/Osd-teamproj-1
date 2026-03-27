@@ -693,7 +693,8 @@ procdump(void)
 
 int
 getnice(int pid)
-{
+{ 
+  if(pid <= 0) return -1;
   struct proc *p;
   
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -711,7 +712,8 @@ getnice(int pid)
 
 int
 setnice(int pid, int value)
-{
+{ 
+  if(pid <= 0) return -1;
   struct proc *p;
 
   if(value < 0 || value > 39)
