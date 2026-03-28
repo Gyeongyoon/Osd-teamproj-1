@@ -1,3 +1,12 @@
+/* AI was used (Claude - Antrhropic
+  Asked AI what edge cases mytest.c might have missed.
+  Based on that, added tests for:
+  - boundary value (nice = 0, 39, 40)
+  - invalid pid (0, negative)
+  - negative nice value
+  - waitpid permission check (non-child process)
+*/
+
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
