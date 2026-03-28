@@ -81,6 +81,9 @@ kalloc(void)
   return (void*)r;
 }
 
+
+// Returns the amount of free memory in bytes
+// by counting free pages in kmem.freelist and multiplying by PGSIZE.
 uint64
 meminfo(void)
 {

@@ -690,9 +690,10 @@ procdump(void)
   }
 }
 
-
+// Reads and returns the nice value of the process with the given pid.
+// Returns -1 if no matching process is found.
 int
-getnice(int pid)
+getnice(int pid) 
 { 
   if(pid <= 0) return -1;
   struct proc *p;
@@ -710,6 +711,9 @@ getnice(int pid)
   return -1;
 }
 
+
+// Sets the nice value of the process with the given pid.
+// Returns 0 on success, -1 if pid not found or value is out of range(0~39).
 int
 setnice(int pid, int value)
 { 
@@ -732,6 +736,8 @@ setnice(int pid, int value)
   return -1;
 }
 
+// Prints process information (name, pid, state, priority).
+// If pid is 0, prints all processes. Otherwise prints only the matching process.
 void
 ps(int pid)
 {
@@ -759,6 +765,9 @@ ps(int pid)
   }
 }
 
+
+// Suspends execution until the specified child process terminates.
+// Returns 0 on success, -1 if pid not found or caller is not the parent.
 int
 waitpid(int pid)
 {
