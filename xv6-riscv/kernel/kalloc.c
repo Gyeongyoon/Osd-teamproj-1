@@ -81,7 +81,9 @@ kalloc(void)
   return (void*)r;
 }
 
-
+/*AI was used (Claude - Anthropic)
+  Asked AI how to traverse kmem.freelist and calculate free memory in bytes
+*/
 // Returns the amount of free memory in bytes
 // by counting free pages in kmem.freelist and multiplying by PGSIZE.
 uint64
