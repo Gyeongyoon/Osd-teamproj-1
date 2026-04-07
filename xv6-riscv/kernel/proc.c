@@ -457,26 +457,84 @@ scheduler(void)
     intr_on();
     intr_off();
 
-    int found = 0;
+    uint64 v0 = (uint64)-1;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+      if(p->state == RUNNABLE || p->state == RUNNING) {
+        if(p->vruntime < v0)
+          v0 = p->vruntime;
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+    if(v0 == (uint64)-1) {
+      asm volatile("wfi");
+      continue;
+    }
+    uint64 sum_w = 0;
+    uint64 weighted_sum = 0;
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE || p->state == RUNNING) {
+        uint64 w = (uint64)nice_to_weight[p->nice];
+        uint64 diff = (p->vruntime >= v0) ? (p->vruntime - v0) : 0;
+        weighted_sum += diff * w;
+        sum_w += w;
+      }
+      release(&p->lock);
+    }
+
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE || p->state == RUNNING) {
+        uint64 diff = (p->vruntime >= v0) ? (p->vruntime - v0) : 0;
+        if(weighted_sum >= diff * sum_w)
+          p->is_eligible = 1;
+        else
+          p->is_eligible = 0;
+      }
+      release(&p->lock);
+    }
+
+    struct proc *selected = 0;
+    uint64 min_vdeadline = (uint64)-1;
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE && p->is_eligible) {
+        if(p->vdeadline < min_vdeadline) {
+          min_vdeadline = p->vdeadline;
+          selected = p;
+        }
+      }
+      release(&p->lock);
+    }
+
+    if(selected == 0) {
+      min_vdeadline = (uint64)-1;
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if(p->vdeadline < min_vdeadline) {
+            min_vdeadline = p->vdeadline;
+            selected = p;
+          }
+        }
+        release(&p->lock);
+      }
+    }
+    if(selected != 0) {
+      acquire(&selected->lock);
+      if(selected->state == RUNNABLE) {
+        if(selected->vdeadline == 0) {
+          selected->vdeadline = selected->vruntime +
+            (uint64)5 * 1024 * 1000 / nice_to_weight[selected->nice];
+        }
+        selected->state = RUNNING;
+        c->proc = selected;
+        swtch(&c->context, &selected->context);
+        c->proc = 0;
+      }
+      release(&selected->lock);
+    } else {
       asm volatile("wfi");
     }
   }
