@@ -689,7 +689,6 @@ procdump(void)
     printf("\n");
   }
 }
-<<<<<<< Updated upstream
 /* AI was used (Claud - Anthropic)
   Asked AI for guidance of implementation details:
   - how to iterate over the process table (proc[NPROC])
@@ -698,10 +697,6 @@ procdump(void)
 */
 // Reads and returns the nice value of the process with the given pid.
 // Returns -1 if no matching process is found.
-=======
-
-
->>>>>>> Stashed changes
 int
 getnice(int pid)
 { 
