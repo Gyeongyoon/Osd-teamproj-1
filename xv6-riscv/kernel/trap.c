@@ -81,9 +81,17 @@ usertrap(void)
     kexit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if(which_dev == 2) {
+    p->runtime += 1000;
+    p->vruntime += (uint64)1024 * 1000 / nice_to_weight[p->nice];
+    p->timeslice--;
 
+    if(p->timeslice <= 0) {
+        p->timeslice = 5;
+        p->vdeadline = p->vruntime + (uint64)5 * 1024 * 1000 / nice_to_weight[p->nice];
+        yield();
+    }
+  }
   prepare_return();
 
   // the user page table to switch to, for trampoline.S

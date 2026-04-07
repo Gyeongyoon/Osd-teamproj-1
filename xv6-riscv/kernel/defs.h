@@ -147,6 +147,7 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            prepare_return(void);
+extern const int nice_to_weight[];
 
 // uart.c
 void            uartinit(void);
