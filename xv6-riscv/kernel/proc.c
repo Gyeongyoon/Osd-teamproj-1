@@ -487,7 +487,7 @@ scheduler(void)
       acquire(&p->lock);
       if(p->state == RUNNABLE || p->state == RUNNING) {
         uint64 diff = (p->vruntime >= v0) ? (p->vruntime - v0) : 0;
-        if(weighted_sum >= diff * sum_w)
+        if(diff * sum_w <= weighted_sum)
           p->is_eligible = 1;
         else
           p->is_eligible = 0;
@@ -524,10 +524,6 @@ scheduler(void)
     if(selected != 0) {
       acquire(&selected->lock);
       if(selected->state == RUNNABLE) {
-        if(selected->vdeadline == 0) {
-          selected->vdeadline = selected->vruntime +
-            (uint64)5 * 1024 * 1000 / nice_to_weight[selected->nice];
-        }
         selected->state = RUNNING;
         c->proc = selected;
         swtch(&c->context, &selected->context);
