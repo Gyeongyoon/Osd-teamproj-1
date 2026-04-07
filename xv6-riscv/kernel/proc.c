@@ -689,6 +689,7 @@ procdump(void)
     printf("\n");
   }
 }
+<<<<<<< Updated upstream
 /* AI was used (Claud - Anthropic)
   Asked AI for guidance of implementation details:
   - how to iterate over the process table (proc[NPROC])
@@ -697,8 +698,12 @@ procdump(void)
 */
 // Reads and returns the nice value of the process with the given pid.
 // Returns -1 if no matching process is found.
+=======
+
+
+>>>>>>> Stashed changes
 int
-getnice(int pid) 
+getnice(int pid)
 { 
   if(pid <= 0) return -1;
   struct proc *p;
@@ -716,11 +721,14 @@ getnice(int pid)
   return -1;
 }
 
+<<<<<<< Updated upstream
 /*AI was used (claude - Anthropic)
   Asked AI how to safely write to p -> nice with the lock held
 */
 // Sets the nice value of the process with the given pid.
 // Returns 0 on success, -1 if pid not found or value is out of range(0~39).
+=======
+>>>>>>> Stashed changes
 int
 setnice(int pid, int value)
 { 
@@ -743,11 +751,14 @@ setnice(int pid, int value)
   return -1;
 }
 
+<<<<<<< Updated upstream
 /* AI was used (Claude - Anthropic)
   Asked AI how to convert p -> state enum to a readable string
 */
 // Prints process information (name, pid, state, priority).
 // If pid is 0, prints all processes. Otherwise prints only the matching process.
+=======
+>>>>>>> Stashed changes
 void
 ps(int pid)
 {
@@ -775,11 +786,14 @@ ps(int pid)
   }
 }
 
+<<<<<<< Updated upstream
 /*AI was used (Claude - Anthropic)
   Asked AI how to use sleep() to wait for a child process to terminate
 */
 // Suspends execution until the specified child process terminates.
 // Returns 0 on success, -1 if pid not found or caller is not the parent.
+=======
+>>>>>>> Stashed changes
 int
 waitpid(int pid)
 {
