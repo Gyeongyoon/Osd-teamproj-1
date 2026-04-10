@@ -310,6 +310,11 @@ kfork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  np->nice = p->nice;
+  np->vruntime = p->vruntime;
+  np->vdeadline = np->vruntime + (uint64)5 * 1024 * 1000 / (uint64)nice_to_weight[np->nice];
+  np->is_eligible = 1;
+
   pid = np->pid;
 
   release(&np->lock);
@@ -654,6 +659,9 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        p->timeslice = 5;
+        p->vdeadline = p->vruntime + (uint64)5 * 1024 * 1000 / (uint64)nice_to_weight[p->nice];
+        p->is_eligible = 1;
       }
       release(&p->lock);
     }
@@ -807,6 +815,7 @@ setnice(int pid, int value)
     acquire(&p->lock);
     if(p->pid == pid) {
       p->nice = value;
+      p->vdeadline = p->vruntime + (uint64)p->timeslice * 1024 * 1000 / (uint64)nice_to_weight[p->nice];
       release(&p->lock);
       return 0;
     }
@@ -825,8 +834,9 @@ void
 ps(int pid)
 {
   struct proc *p;
+  extern uint ticks;
 
-  printf("name\t pid\t state\t\t priority\n");
+  printf("name\tpid\tstate\t\tnice\truntime/w\truntime\t\tvruntime\tvdeadline\teligible\ttick\n");
 
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
@@ -842,7 +852,16 @@ ps(int pid)
       else if(p->state == ZOMBIE)   state = "ZOMBIE";
       else                          state = "USED";
 
-      printf("%s\t %d\t %s\t %d\n", p->name, p->pid, state, p->nice);
+      uint64 w = (uint64)nice_to_weight[p->nice];
+      uint64 rw = p->runtime / w;
+
+      printf("%s\t%d\t%s\t%d\t", p->name, p->pid, state, p->nice);
+      printf("%d\t", (int)rw);
+      printf("%d\t", (int)p->runtime);
+      printf("%d\t", (int)p->vruntime);
+      printf("%d\t", (int)p->vdeadline);
+      printf("%d\t", p->is_eligible);
+      printf("%d\n", (int)((uint64)ticks * 1000));
     }
     release(&p->lock);
   }
