@@ -29,6 +29,13 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+/* AI was used (Claude - Anthropic)
+   Asked AI how to integrate EEVDF vruntime and timeslice
+   update logic into xv6's existing usertrap() timer interrupt
+   handler, including millitick unit conversion to avoid
+   integer truncation with large weight values.
+*/
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from, and returns to, trampoline.S

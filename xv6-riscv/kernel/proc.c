@@ -274,6 +274,12 @@ growproc(int n)
   return 0;
 }
 
+/* AI was used (Claude - Anthropic)
+   Asked AI where to place EEVDF parameter inheritance
+   in xv6's kfork() function relative to existing allocproc()
+   initialization, and how to compute vdeadline using
+   integer arithmetic without overflow.
+*/
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -438,6 +444,13 @@ kwait(uint64 addr)
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
 }
+
+/* AI was used (Claude - Anthropic)
+   Asked AI how to integrate EEVDF vruntime and timeslice
+   update logic into xv6's existing usertrap() timer interrupt
+   handler, including millitick unit conversion to avoid
+   integer truncation with large weight values.
+*/
 
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -825,9 +838,16 @@ setnice(int pid, int value)
   return -1;
 }
 
-/* AI was used (Claude - Anthropic)
+/* AI was used (Claude - Anthropic) -> part1
   Asked AI how to convert p -> state enum to a readable string
 */
+
+/* AI was used (Claude - Anthropic) -> part2
+   Asked AI how to print uint64 EEVDF fields using xv6's
+   limited printf implementation, and how to structure
+   multiple printf calls to avoid format string errors.
+*/
+
 // Prints process information (name, pid, state, priority).
 // If pid is 0, prints all processes. Otherwise prints only the matching process.
 void
