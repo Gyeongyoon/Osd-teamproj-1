@@ -5,8 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "spinlock.h"
-#include "proc.h"
+#include "sleeplock.h"
 #include "fs.h"
+#include "mmap.h"
+#include "file.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -454,6 +457,30 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
   struct proc *p = myproc();
+
+  struct mmap_area *ma = find_mmap(PGROUNDDOWN(va), p);
+  if(ma != 0){
+    if(!read && !(ma->prot & PROT_WRITE))
+      return 0;
+
+    mem = (uint64)kalloc();
+    if(mem == 0) return 0;
+    memset((void*)mem, 0, PGSIZE);
+
+    if(ma->f != 0){
+      uint64 file_offset = ma->offset + (PGROUNDDOWN(va) - ma->addr);
+      ma->f->off = file_offset;
+      fileread(ma->f, mem, PGSIZE);
+    }
+
+    if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, mem,
+                PTE_U | (ma->prot & PROT_READ ? PTE_R : 0)
+                      | (ma->prot & PROT_WRITE ? PTE_W : 0)) != 0){
+      kfree((void*)mem);
+      return 0;
+    }
+    return mem;
+  }
 
   if (va >= p->sz)
     return 0;
