@@ -528,3 +528,104 @@ sys_munmap(void)
   ma->p = 0;
   return 1;
 }
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length, prot, flags, fd, offset;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, &offset);
+
+  struct proc *p = myproc();
+
+  // validate addr alignment
+  if(addr % PGSIZE != 0)
+    return 0;
+
+  // validate length
+  if(length <= 0 || length % PGSIZE != 0)
+    return 0;
+
+  // file-backed mapping validation
+  struct file *f = 0;
+  if(!(flags & MAP_ANONYMOUS)){
+    if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
+      return 0;
+    if((prot & PROT_WRITE) && !f->writable)
+      return 0;
+  }
+
+  // find empty slot and check overlap
+  struct mmap_area *slot = 0;
+  uint64 new_start = MMAPBASE + addr;
+  uint64 new_end = new_start + length;
+
+  for(int i = 0; i < MAXMMAP; i++){
+    if(mmap_area_list[i].p == 0){
+      if(slot == 0) slot = &mmap_area_list[i];
+    } else if(mmap_area_list[i].p == p){
+      uint64 s = mmap_area_list[i].addr;
+      uint64 e = s + mmap_area_list[i].length;
+      if(new_start < e && new_end > s)
+        return 0;  // overlap
+    }
+  }
+  if(slot == 0)
+    return 0;  // no free slot
+
+  // record mapping info
+  slot->addr   = new_start;
+  slot->length = length;
+  slot->offset = offset;
+  slot->prot   = prot;
+  slot->flags  = flags;
+  slot->p      = p;
+  slot->f      = 0;
+
+  if(!(flags & MAP_ANONYMOUS)){
+    slot->f = filedup(f);
+  }
+
+  // eager allocation (MAP_POPULATE)
+  if(flags & MAP_POPULATE){
+    for(int i = 0; i < length; i += PGSIZE){
+      char *mem = kalloc();
+      if(mem == 0){
+        slot->p = 0;
+        return 0;
+      }
+      memset(mem, 0, PGSIZE);
+
+      if(!(flags & MAP_ANONYMOUS)){
+        // read file data
+        ilock(f->ip);
+        readi(f->ip, 0, (uint64)mem, offset + i, PGSIZE);
+        iunlock(f->ip);
+      }
+
+      int perm = PTE_U;
+      if(prot & PROT_READ)  perm |= PTE_R;
+      if(prot & PROT_WRITE) perm |= PTE_W;
+
+      if(mappages(p->pagetable, new_start + i, PGSIZE, (uint64)mem, perm) < 0){
+        kfree(mem);
+        slot->p = 0;
+        return 0;
+      }
+    }
+  }
+
+  return new_start;
+}
+
+uint64
+sys_freemem(void)
+{
+  return freemem();
+}
