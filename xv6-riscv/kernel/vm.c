@@ -469,8 +469,9 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
 
     if(ma->f != 0){
       uint64 file_offset = ma->offset + (PGROUNDDOWN(va) - ma->addr);
-      ma->f->off = file_offset;
-      fileread(ma->f, mem, PGSIZE);
+      ilock(ma->f->ip);
+      readi(ma->f->ip, 0, mem, file_offset, PGSIZE);
+      iunlock(ma->f->ip);
     }
 
     if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, mem,
