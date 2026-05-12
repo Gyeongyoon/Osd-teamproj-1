@@ -25,7 +25,7 @@ char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
 void* mmap(void*, int, int, int, int, int);
-int   munmap(void*);
+int   munmap(uint64);
 int   freemem(void);
 
 // ulib.c
