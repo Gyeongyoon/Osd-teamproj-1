@@ -520,8 +520,7 @@ sys_munmap(void)
     uint64 va = ma->addr + i;
     uint64 pa = walkaddr(p->pagetable, va);
     if(pa != 0){
-      kfree((void*)pa);
-      uvmunmap(p->pagetable, va, 1, 0);
+      uvmunmap(p->pagetable, va, 1, 1);  
     }
   }
 
