@@ -12,4 +12,9 @@
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define USERSTACK    1     // user stack pages
-
+#define MMAPBASE      0x40000000L  // base address of mmap region
+#define MAXMMAP       64           // maximum number of mmap slots
+#define PROT_READ     0x1          // read permission
+#define PROT_WRITE    0x2          // write permission
+#define MAP_ANONYMOUS 0x1          // anonymous mapping (not file-backed)
+#define MAP_POPULATE  0x2          // allocate physical pages immediately
