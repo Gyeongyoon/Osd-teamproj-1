@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "mmap.h"
 
 struct cpu cpus[NCPU];
 
@@ -301,6 +302,39 @@ kfork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  
+  for(int j = 0; j < MAXMMAP; j++){
+    struct mmap_area *ma = &mmap_area_list[j];
+    if(ma->p != p) continue;
+
+    struct mmap_area *nma = 0;
+    for(int k = 0; k < MAXMMAP; k++){
+      if(mmap_area_list[k].p == 0){
+        nma = &mmap_area_list[k];
+        break;
+      }
+    }
+    if(nma == 0) continue;
+
+    *nma = *ma;
+    nma->p = np;
+    if(nma->f) filedup(nma->f);
+
+    for(int offset = 0; offset < ma->length; offset += PGSIZE){
+      uint64 va = ma->addr + offset;
+      uint64 pa = walkaddr(p->pagetable, va);
+      if(pa == 0) continue;
+
+      char *mem = kalloc();
+      if(mem == 0) continue;
+      memmove(mem, (void*)pa, PGSIZE);
+      mappages(np->pagetable, va, PGSIZE, (uint64)mem,
+               PTE_U | (ma->prot & PROT_READ  ? PTE_R : 0)
+                     | (ma->prot & PROT_WRITE ? PTE_W : 0));
+    }
+  }
+  
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
