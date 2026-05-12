@@ -29,6 +29,7 @@ OBJS = \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o
+  $K/mmap.o
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -151,6 +152,7 @@ UPROGS=\
 	$U/_tni\
 	$U/_tnw\
 	$U/_tvr\
+	$U/_pa3_test\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
