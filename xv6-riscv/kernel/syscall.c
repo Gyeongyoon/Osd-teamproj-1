@@ -139,9 +139,15 @@ static uint64 (*syscalls[])(void) = {
 [SYS_ps]       sys_ps,
 [SYS_meminfo]  sys_meminfo,
 [SYS_waitpid]  sys_waitpid,
+<<<<<<< Updated upstream
 [SYS_mmap]    sys_mmap,
 [SYS_munmap]  sys_munmap,
 [SYS_freemem] sys_freemem,
+=======
+[SYS_mmap]     sys_mmap,
+[SYS_munmap]   sys_munmap,
+[SYS_freemem]  sys_freemem,
+>>>>>>> Stashed changes
 };
 
 void
