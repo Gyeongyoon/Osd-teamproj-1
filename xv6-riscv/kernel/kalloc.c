@@ -102,7 +102,10 @@ meminfo(void)
 
   return count * PGSIZE;
 }
-
+/*
+AI was used.
+Asked AI how to traverse kmem.freelist to count the number of free physical pages
+*/
 // Returns the number of free physical memory pages
 int
 freemem(void)

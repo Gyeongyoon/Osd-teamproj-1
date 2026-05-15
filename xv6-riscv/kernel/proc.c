@@ -281,6 +281,13 @@ growproc(int n)
    initialization, and how to compute vdeadline using
    integer arithmetic without overflow.
 */
+
+/*
+AI was used.
+Asked AI how to copy parent mmap_area slots to the child during fork(),
+including filedup() for file-backed mappings and explicit page copying
+for pages outside uvmcopy()'s range
+*/
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int

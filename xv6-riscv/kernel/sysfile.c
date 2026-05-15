@@ -504,7 +504,12 @@ sys_pipe(void)
   }
   return 0;
 }
-
+/*
+AI was used.
+Asked AI how to safely free only allocated pages during munmap()
+using walkaddr() to skip unallocated lazy pages,
+and the correct do_free flag for uvmunmap()
+*/
 uint64
 sys_munmap(void)
 {
@@ -527,7 +532,12 @@ sys_munmap(void)
   ma->p = 0;
   return 1;
 }
-
+/*
+AI was used.
+Asked AI how to implement mmap() in xv6 including argument validation,
+slot overlap detection, filedup() usage for file reference management,
+and eager allocation using kalloc/readi/mappages
+*/
 uint64
 sys_mmap(void)
 {

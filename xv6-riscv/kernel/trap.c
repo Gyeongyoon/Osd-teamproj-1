@@ -36,6 +36,11 @@ trapinithart(void)
    integer truncation with large weight values.
 */
 
+/*
+AI ws used.
+Asked AI how to integrate page fault handling for mmap regions into usertrap()
+by dispatching scause 13/15 to vmfault()
+*/
 //
 // handle an interrupt, exception, or system call from user space.
 // called from, and returns to, trampoline.S

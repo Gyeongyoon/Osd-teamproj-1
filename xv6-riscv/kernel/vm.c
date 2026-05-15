@@ -447,7 +447,11 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
-
+/*
+AI was used.
+Asked AI how to compute the correct file offset for a faulted page and how to use readi()
+with ilock/iunlock instead of fileread() for safe file access in the page fault handler
+*/
 // allocate and map user memory if process is referencing a page
 // that was lazily allocated in sys_sbrk().
 // returns 0 if va is invalid or already mapped, or if

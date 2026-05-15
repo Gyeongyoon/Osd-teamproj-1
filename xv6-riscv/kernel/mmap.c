@@ -1,3 +1,8 @@
+/* AI was used
+Asked AI how to define and manage a global mmap_area array shared across processes,
+and how to implement find_mmap() to locate a slot by virtual address and process pointer 
+*/
+
 #include "types.h"
 #include "param.h"
 #include "mmap.h"
