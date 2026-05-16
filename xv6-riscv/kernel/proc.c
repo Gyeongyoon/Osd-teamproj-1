@@ -173,6 +173,11 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
+/* AI was used (Claude - Anthropic)
+   Asked AI how to clean up mmap regions on process exit to prevent
+   freewalk: leaf panic, including correct ordering of uvmunmap(),
+   fileclose(), and slot cleanup before proc_freepagetable() is called
+*/
 static void
 freeproc(struct proc *p)
 {
