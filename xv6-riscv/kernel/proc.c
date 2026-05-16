@@ -179,6 +179,22 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+  for(int i = 0; i < MAXMMAP; i++){
+    if(mmap_area_list[i].p == p){
+      for(int j = 0; j < mmap_area_list[i].length; j += PGSIZE){
+        uint64 va = mmap_area_list[i].addr + j;
+        uint64 pa = walkaddr(p->pagetable, va);
+        if(pa != 0){
+          uvmunmap(p->pagetable, va, 1, 1);
+        }
+      }
+      if(mmap_area_list[i].f)
+        fileclose(mmap_area_list[i].f);
+      mmap_area_list[i].p = 0;
+    }
+  }
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
