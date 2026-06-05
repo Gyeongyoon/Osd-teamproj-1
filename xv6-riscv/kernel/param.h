@@ -9,7 +9,7 @@
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
 #define LOGBLOCKS    (MAXOPBLOCKS*3)  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
-#define FSSIZE       2000  // size of file system in blocks
+#define FSSIZE       30000 // PA4: room for swap area at tail of fs.img
 #define MAXPATH      128   // maximum file path name
 #define USERSTACK    1     // user stack pages
 #define MMAPBASE      0x40000000L  // base address of mmap region

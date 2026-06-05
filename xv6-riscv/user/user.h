@@ -27,6 +27,7 @@ int uptime(void);
 void* mmap(uint64, int, int, int, int, int);
 int   munmap(uint64);
 int   freemem(void);
+int   swapstat(int*, int*);
 
 // ulib.c
 int stat(const char*, struct stat*);

@@ -8,6 +8,8 @@ OBJS = \
   $K/printf.o \
   $K/uart.o \
   $K/kalloc.o \
+  $K/swap.o \
+  $K/lru.o \
   $K/spinlock.o \
   $K/string.o \
   $K/main.o \
@@ -154,6 +156,7 @@ UPROGS=\
 	$U/_tvr\
 	$U/_pa3_test\
 	$U/_pa3_edge_test\
+	$U/_pa4_test\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

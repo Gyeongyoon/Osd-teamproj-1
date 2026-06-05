@@ -168,6 +168,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     if(*pte & PTE_V)
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
+    if(perm & PTE_U)              
+      lru_add(pagetable, a, pa);
     if(a == last)
       break;
     a += PGSIZE;
@@ -204,10 +206,16 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0) // leaf page table entry allocated?
       continue;   
-    if((*pte & PTE_V) == 0)  // has physical page been allocated?
+    if((*pte & PTE_V) == 0){  // not resident
+      if(*pte & PTE_S){       
+        swap_free_slot(PTE2SLOT(*pte));
+        *pte = 0;
+      }
       continue;
+    }
     if(do_free){
       uint64 pa = PTE2PA(*pte);
+      lru_remove(pa);         
       kfree((void*)pa);
     }
     *pte = 0;

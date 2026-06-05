@@ -94,7 +94,39 @@ lru_size(void)
 void
 lru_add(pagetable_t pt, uint64 va, uint64 pa)
 {
-  // TODO: implement.
+  struct page *pg = pa_to_page(pa);
+
+  acquire(&lru.lock);
+
+  // 이미 리스트에 있으면 먼저 떼어낸다 (tail로 재삽입 = freshness 갱신)
+  if(pg->pagetable != 0){
+    if(pg->next == pg){
+      lru.head = 0;                 // 유일한 노드였음
+    } else {
+      pg->prev->next = pg->next;
+      pg->next->prev = pg->prev;
+      if(lru.head == pg)
+        lru.head = pg->next;
+    }
+    lru.count--;
+  }
+
+  pg->pagetable = (uint64)pt;
+  pg->vaddr     = va;
+
+  if(lru.head == 0){                // 빈 리스트
+    pg->next = pg->prev = pg;
+    lru.head = pg;
+  } else {                          // tail( = head->prev ) 뒤에 삽입
+    struct page *tail = lru.head->prev;
+    tail->next     = pg;
+    pg->prev       = tail;
+    pg->next       = lru.head;
+    lru.head->prev = pg;
+  }
+  lru.count++;
+
+  release(&lru.lock);
 }
 
 //
@@ -119,7 +151,30 @@ lru_add(pagetable_t pt, uint64 va, uint64 pa)
 void
 lru_remove(uint64 pa)
 {
-  // TODO: implement.
+  struct page *pg = pa_to_page(pa);
+
+  acquire(&lru.lock);
+
+  if(pg->pagetable == 0){           // 리스트에 없음 (스왑아웃됐거나 추적 안 됨)
+    release(&lru.lock);
+    return;
+  }
+
+  if(pg->next == pg){
+    lru.head = 0;                   // 유일한 노드였음
+  } else {
+    pg->prev->next = pg->next;
+    pg->next->prev = pg->prev;
+    if(lru.head == pg)
+      lru.head = pg->next;
+  }
+
+  pg->next = pg->prev = 0;
+  pg->pagetable = 0;
+  pg->vaddr     = 0;
+  lru.count--;
+
+  release(&lru.lock);
 }
 
 //
@@ -160,6 +215,69 @@ lru_remove(uint64 pa)
 uint64
 lru_select_victim(pagetable_t *out_pt, uint64 *out_va)
 {
-  // TODO: implement.
-  return 0;
+  acquire(&lru.lock);
+
+  if(lru.head == 0){
+    release(&lru.lock);
+    return 0;                       // LRU 비어있음 -> 호출자(swap_out)가 OOM 판단
+  }
+
+  // 2*count면 모든 노드가 한 번씩 PTE_A 클리어 + 다음 패스에서 victim 보장.
+  // +1은 안전 여유.
+  int budget = 2 * lru.count + 1;
+  while(budget-- > 0){
+    struct page *pg  = lru.head;
+    pte_t       *pte = walk((pagetable_t)pg->pagetable, pg->vaddr, 0);
+
+    // 방어: 매핑이 사라진 stale 노드면 버리고 다음으로.
+    if(pte == 0 || (*pte & PTE_V) == 0){
+      struct page *nxt = pg->next;
+      if(pg->next == pg){
+        lru.head = 0;
+      } else {
+        pg->prev->next = pg->next;
+        pg->next->prev = pg->prev;
+        lru.head = nxt;
+      }
+      pg->next = pg->prev = 0;
+      pg->pagetable = 0;
+      pg->vaddr = 0;
+      lru.count--;
+      if(lru.head == 0){
+        release(&lru.lock);
+        return 0;
+      }
+      continue;
+    }
+
+    if(*pte & PTE_A){               // 최근 사용됨 -> A 클리어 + second chance
+      *pte &= ~PTE_A;
+      sfence_vma();                 // 클리어한 A 비트를 MMU에 반영
+      lru.head = pg->next;          // 바늘 한 칸 (pg가 tail로 감)
+      continue;
+    }
+
+    // PTE_A == 0 -> victim 확정. 언링크 후 반환.
+    uint64 pa = PTE2PA(*pte);
+    *out_pt = (pagetable_t)pg->pagetable;
+    *out_va = pg->vaddr;
+
+    if(pg->next == pg){
+      lru.head = 0;
+    } else {
+      pg->prev->next = pg->next;
+      pg->next->prev = pg->prev;
+      lru.head = pg->next;
+    }
+    pg->next = pg->prev = 0;
+    pg->pagetable = 0;
+    pg->vaddr = 0;
+    lru.count--;
+
+    release(&lru.lock);
+    return pa;
+  }
+
+  release(&lru.lock);
+  return 0;                         // 종료 보장상 도달 불가
 }
