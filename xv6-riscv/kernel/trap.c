@@ -51,9 +51,12 @@ swap_in_if_swapped(pagetable_t pt, uint64 va)
 */
 
 /*
-AI ws used.
-Asked AI how to integrate page fault handling for mmap regions into usertrap()
-by dispatching scause 13/15 to vmfault()
+AI was used.
+Asked AI how to dispatch page faults in usertrap(): a fault on scause
+12/13/15 is first routed to swap_in_if_swapped(), which restores the page
+only if the PTE is a swapped-out entry (PTE_S set, PTE_V clear) and
+otherwise returns 0. Faults that are not swapped-out (scause 13/15) then
+fall through to vmfault() for PA3 mmap / lazy-allocation handling.
 */
 //
 // handle an interrupt, exception, or system call from user space.
