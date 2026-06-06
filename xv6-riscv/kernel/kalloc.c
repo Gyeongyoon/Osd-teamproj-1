@@ -99,6 +99,11 @@ kalloc_noswap(void)
 
 // normal allocation: if the freelist is empty, evict a user page via swap.
 // Use only in lock-free contexts (uvmalloc, exec, uvmcopy data copy, ...).
+/* AI was used (Claude - Anthropic)
+   Asked AI how kalloc should react under memory pressure: try the normal
+   free-list path first, and only when that is empty call swap_out to evict
+   a page and hand the freed frame back. swap_out is called with no kmem lock
+   held so the disk I/O inside it never sleeps under a spinlock. */
 void *
 kalloc(void)
 {

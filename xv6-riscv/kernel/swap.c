@@ -206,11 +206,12 @@ swapstat(int *nr_sectors_read, int *nr_sectors_write)
 //
 // ============================================================================
 /* AI was used (Claude - Anthropic)
-   Asked AI how to rewrite a victim PTE into the swapped-out encoding
-   (slot in PPN via SLOT2PTE, clear PTE_V, set PTE_S, preserve U/R/W/X),
-   and why the swap-in target can't be re-evicted by kalloc's nested
-   swap_out (it isn't on the LRU until after kalloc).
-*/
+   Asked AI how swap_out should evict a victim: pick one via the clock-based
+   lru_select_victim, reserve a swap slot (restore the victim to the LRU and
+   bail if the swap area is full), write the page out with swapwrite, then
+   rewrite the victim PTE into the swapped-out encoding -- slot index in the
+   PPN via SLOT2PTE, clear PTE_V, set PTE_S, preserve U/R/W/X -- and return
+   the freed frame to kalloc. */
 // ============================================================================
 
 void *
@@ -286,6 +287,13 @@ swap_out(void)
 //
 //   Return 0 on success.
 //
+
+/* AI was used (Claude - Anthropic)
+   Asked AI how to restore a swapped-out page on a page fault: validate the
+   PTE is really swapped (PTE_V=0, PTE_S=1), kalloc a fresh frame (which may
+   itself trigger a nested swap_out by design), swapread the slot back, free
+   the slot, rewrite the PTE to PTE_V while preserving U/R/W/X, re-add to the
+   LRU, and sfence_vma so the faulting instruction can retry. */
 int
 swap_in(pagetable_t pt, uint64 va)
 {

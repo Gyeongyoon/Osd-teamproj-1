@@ -91,6 +91,13 @@ lru_size(void)
 //   6. Increment lru.count.
 //   7. Release lru.lock.
 //
+
+/* AI was used (Claude - Anthropic)
+   Asked AI how to implement add / remove / clock-based victim selection on a
+   circular doubly-linked LRU list: why advancing lru.head is equivalent to
+   rotating a second-chance node to the tail, and why sfence_vma() must follow
+   a PTE_A clear. struct page stores the page table as uint64, so it is cast
+   to pagetable_t at each walk() call site. */
 void
 lru_add(pagetable_t pt, uint64 va, uint64 pa)
 {

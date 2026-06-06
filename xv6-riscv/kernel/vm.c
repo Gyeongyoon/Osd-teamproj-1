@@ -145,6 +145,10 @@ walkaddr(pagetable_t pagetable, uint64 va)
 // va and size MUST be page-aligned.
 // Returns 0 on success, -1 if walk() couldn't
 // allocate a needed page-table page.
+/* AI was used (Claude - Anthropic)
+  PA4 hook: asked AI where to register a frame into the LRU list when a
+  user page is mapped. Only PTE_U pages are swappable, so kernel mappings
+  (no PTE_U) are skipped. */
 int
 mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
@@ -195,6 +199,11 @@ uvmcreate()
 // Remove npages of mappings starting from va. va must be
 // page-aligned. It's OK if the mappings don't exist.
 // Optionally free the physical memory.
+/* AI was used (Claude - Anthropic)
+  PA4 hook: asked AI how to keep LRU/swap bookkeeping consistent on unmap.
+  A swapped-out PTE (PTE_S, PTE_V=0) frees its swap slot; a resident user
+  frame is removed from the LRU before kfree so no stale node is left
+  behind. */
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -305,6 +314,12 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+
+/* AI was used (Claude - Anthropic)
+   Asked AI how fork should duplicate a parent page whose frame has been
+   evicted: a PTE_S entry has no resident data to memmove, so the page is
+   brought back with swap_in first and only then copied into the child.
+   Pages that are neither present nor swapped are skipped as before. */
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
@@ -447,6 +462,11 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 // Copy bytes to dst from virtual address srcva in a given page table,
 // until a '\0', or max.
 // Return 0 on success, -1 on error.
+
+/* AI was used (Claude - Anthropic)
+  Unlike copyin/copyout, this routine never delegates to vmfault, so an
+  evicted page would just fail the lookup. We detect the PTE_S marker
+  and pull the page back in before retrying the copy. */
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
@@ -457,9 +477,7 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0) {
-      /* AI was used (Claude - Anthropic)
-        copyinstr doesn't fall through to vmfault, so restore a
-        swapped-out page (PTE_S) via swap_in here before retrying. */
+      
       pte_t *pte = walk(pagetable, va0, 0);
       if(pte && (*pte & PTE_S) && !(*pte & PTE_V)){
         if(swap_in(pagetable, va0) < 0)
@@ -506,18 +524,20 @@ with ilock/iunlock instead of fileread() for safe file access in the page fault 
 // that was lazily allocated in sys_sbrk().
 // returns 0 if va is invalid or already mapped, or if
 // out of physical memory, and physical address if successful.
+
+/* AI was used (Claude - Anthropic)
+  The kernel's copy helpers reach vmfault directly once walkaddr yields 0,
+  which skips the PTE_S branch that usertrap performs. Because an evicted
+  page keeps PTE_V cleared, walkaddr cannot tell it apart from an
+  unallocated lazy page, and the default path would clobber it. We pin
+  down this case by inspecting the PTE flags and route it to swap_in
+  rather than minting a blank frame. (Traced with our own MAP/UNMAP/
+  SWAPOUT instrumentation.) */
 uint64
 vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
   struct proc *p = myproc();
-  /* AI was used (Claude - Anthropic)
-     copyin/copyout/copyinstr call vmfault directly when walkaddr returns 0,
-     bypassing usertrap's PTE_S check. A swapped-out page has PTE_V=0, so
-     walkaddr returns 0 and vmfault would otherwise overwrite the swapped
-     page with a fresh zero page. Diagnosed via MAP/UNMAP/SWAPOUT logging:
-     handle PTE_S here by restoring through swap_in instead of allocating.
-  */
 
   pte_t *pte = walk(pagetable, PGROUNDDOWN(va), 0);
   if(pte && (*pte & PTE_S) && !(*pte & PTE_V)){
