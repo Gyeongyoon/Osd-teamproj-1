@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -57,6 +58,7 @@ void            ireclaim(int);
 
 // kalloc.c
 void*           kalloc(void);
+void*           kalloc_noswap(void);
 void            kfree(void *);
 void            kinit(void);
 uint64          meminfo(void);

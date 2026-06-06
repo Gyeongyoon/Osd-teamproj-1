@@ -168,8 +168,9 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     if(*pte & PTE_V)
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
-    if(perm & PTE_U)              
+    if(perm & PTE_U){
       lru_add(pagetable, a, pa);
+    }
     if(a == last)
       break;
     a += PGSIZE;
@@ -204,10 +205,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
-    if((pte = walk(pagetable, a, 0)) == 0) // leaf page table entry allocated?
-      continue;   
-    if((*pte & PTE_V) == 0){  // not resident
-      if(*pte & PTE_S){       
+    if((pte = walk(pagetable, a, 0)) == 0)
+      continue;
+    if((*pte & PTE_V) == 0){
+      if(*pte & PTE_S){                  // swapped-out page -> reclaim slot
         swap_free_slot(PTE2SLOT(*pte));
         *pte = 0;
       }
@@ -215,7 +216,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     }
     if(do_free){
       uint64 pa = PTE2PA(*pte);
-      lru_remove(pa);         
+      lru_remove(pa);                    // drop resident user frame from LRU
       kfree((void*)pa);
     }
     *pte = 0;
@@ -314,20 +315,49 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      continue;   // page table entry hasn't been allocated
-    if((*pte & PTE_V) == 0)
-      continue;   // physical page hasn't been allocated
-    pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
+      continue;
+
+    if((*pte & PTE_V) == 0){
+      if(!(*pte & PTE_S))
+        continue;
+      if((mem = kalloc()) == 0)
+        goto err;
+      if(swap_in(old, i) < 0){
+        kfree((void*)mem);
+        goto err;
+      }
+      pte = walk(old, i, 0);
+      pa = PTE2PA(*pte);
+      flags = PTE_FLAGS(*pte);
+      memmove((void*)mem, (char*)pa, PGSIZE);
+      if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+        kfree((void*)mem);
+        goto err;
+      }
+      continue;
+    }
+
     if((mem = kalloc()) == 0)
       goto err;
-    memmove(mem, (char*)pa, PGSIZE);
+    pte = walk(old, i, 0);
+    if((*pte & PTE_V) == 0){
+      if(*pte & PTE_S){
+        if(swap_in(old, i) < 0){ kfree((void*)mem); goto err; }
+        pte = walk(old, i, 0);
+      } else {
+        kfree((void*)mem);
+        continue;
+      }
+    }
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+    memmove((void*)mem, (char*)pa, PGSIZE);
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+      kfree((void*)mem);
       goto err;
     }
   }
-  return 0;
+  return 0;           
 
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
@@ -426,8 +456,20 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   while(got_null == 0 && max > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    if(pa0 == 0) {
+      /* AI was used (Claude - Anthropic)
+        copyinstr doesn't fall through to vmfault, so restore a
+        swapped-out page (PTE_S) via swap_in here before retrying. */
+      pte_t *pte = walk(pagetable, va0, 0);
+      if(pte && (*pte & PTE_S) && !(*pte & PTE_V)){
+        if(swap_in(pagetable, va0) < 0)
+          return -1;
+        pa0 = walkaddr(pagetable, va0);
+      }
+      if(pa0 == 0)
+        return -1;
+    }
+      
     n = PGSIZE - (srcva - va0);
     if(n > max)
       n = max;
@@ -469,6 +511,20 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
   struct proc *p = myproc();
+  /* AI was used (Claude - Anthropic)
+     copyin/copyout/copyinstr call vmfault directly when walkaddr returns 0,
+     bypassing usertrap's PTE_S check. A swapped-out page has PTE_V=0, so
+     walkaddr returns 0 and vmfault would otherwise overwrite the swapped
+     page with a fresh zero page. Diagnosed via MAP/UNMAP/SWAPOUT logging:
+     handle PTE_S here by restoring through swap_in instead of allocating.
+  */
+
+  pte_t *pte = walk(pagetable, PGROUNDDOWN(va), 0);
+  if(pte && (*pte & PTE_S) && !(*pte & PTE_V)){
+    if(swap_in(pagetable, PGROUNDDOWN(va)) < 0)
+      return 0;
+    return walkaddr(pagetable, PGROUNDDOWN(va));
+  }
 
   struct mmap_area *ma = find_mmap(PGROUNDDOWN(va), p);
   if(ma != 0){

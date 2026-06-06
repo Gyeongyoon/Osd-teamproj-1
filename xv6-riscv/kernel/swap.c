@@ -204,11 +204,46 @@ swapstat(int *nr_sectors_read, int *nr_sectors_write)
 //   lru_add(pt, va, pa)    -- re-insert a frame into the LRU (used on
 //                             failure to put the page back where it was)
 //
+// ============================================================================
+/* AI was used (Claude - Anthropic)
+   Asked AI how to rewrite a victim PTE into the swapped-out encoding
+   (slot in PPN via SLOT2PTE, clear PTE_V, set PTE_S, preserve U/R/W/X),
+   and why the swap-in target can't be re-evicted by kalloc's nested
+   swap_out (it isn't on the LRU until after kalloc).
+*/
+// ============================================================================
+
 void *
 swap_out(void)
 {
-  // TODO: implement.
-  return 0;
+  pagetable_t pt;
+  uint64 va;
+  pte_t *pte;
+
+  uint64 pa = lru_select_victim(&pt, &va);
+  if(pa == 0)
+    return 0;
+
+  int slot = swap_alloc_slot();
+  if(slot < 0){
+    lru_add(pt, va, pa);
+    return 0;
+  }
+
+  swapwrite(pa, slot);
+
+  pte = walk(pt, va, 0);
+  if(pte == 0){
+    swap_free_slot(slot);
+    return 0;
+  }
+  uint64 flags = PTE_FLAGS(*pte);
+  flags &= ~PTE_V;
+  flags |= PTE_S;
+  *pte = SLOT2PTE(slot) | flags;
+  sfence_vma();
+
+  return (void *)pa;
 }
 
 //
@@ -254,6 +289,30 @@ swap_out(void)
 int
 swap_in(pagetable_t pt, uint64 va)
 {
-  // TODO: implement.
-  return -1;
+  pte_t *pte;
+
+  va = PGROUNDDOWN(va);
+
+  pte = walk(pt, va, 0);
+  if(pte == 0 || (*pte & PTE_V) || !(*pte & PTE_S))
+    return -1;
+
+  int slot = PTE2SLOT(*pte);
+
+  uint64 mem = (uint64)kalloc();
+  if(mem == 0)
+    return -1;
+
+  swapread(mem, slot);
+  swap_free_slot(slot);
+
+  uint64 flags = PTE_FLAGS(*pte);
+  flags &= ~PTE_S;
+  flags |= PTE_V;
+  *pte = PA2PTE(mem) | flags;
+
+  lru_add(pt, va, mem);
+
+  sfence_vma();
+  return 0;
 }

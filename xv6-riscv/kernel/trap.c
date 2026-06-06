@@ -30,6 +30,20 @@ trapinithart(void)
 }
 
 /* AI was used (Claude - Anthropic)
+   Asked AI how to dispatch a page fault to swap_in only when the faulting
+   PTE is actually a swapped-out entry (PTE_S set, PTE_V clear), so that
+   mmap / lazy-alloc faults still fall through to vmfault.
+*/
+static int
+swap_in_if_swapped(pagetable_t pt, uint64 va)
+{
+  pte_t *pte = walk(pt, PGROUNDDOWN(va), 0);
+  if(pte == 0 || (*pte & PTE_V) || !(*pte & PTE_S))
+    return -1;
+  return swap_in(pt, va);
+}
+
+/* AI was used (Claude - Anthropic)
    Asked AI how to integrate EEVDF vruntime and timeslice
    update logic into xv6's existing usertrap() timer interrupt
    handler, including millitick unit conversion to avoid
@@ -80,9 +94,11 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if((r_scause() == 12 || r_scause() == 13 || r_scause() == 15) &&
+            swap_in_if_swapped(p->pagetable, r_stval()) == 0){
   } else if((r_scause() == 15 || r_scause() == 13) &&
             vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
-    // page fault on lazily-allocated page
+    // page fault on lazily-allocated page (PA3 mmap / lazy alloc)
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());

@@ -65,8 +65,16 @@ kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
-void *
-kalloc(void)
+/* AI was used (Claude - Anthropic)
+   Asked AI how to split kalloc into a swap-capable path (for user pages)
+   and a swap-free path (kalloc_noswap, for page-table pages and other
+   allocations made while holding a spinlock), to avoid sleeping on disk
+   I/O under a lock ("sched locks").
+*/
+
+// internal: pull one page off the freelist (never triggers swap)
+static void *
+kalloc_raw(void)
 {
   struct run *r;
 
@@ -79,6 +87,32 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+// swap-free allocation: freelist only, returns 0 if empty.
+// Use for allocations made while holding a lock (page-table pages, etc.).
+void *
+kalloc_noswap(void)
+{
+  return kalloc_raw();
+}
+
+// normal allocation: if the freelist is empty, evict a user page via swap.
+// Use only in lock-free contexts (uvmalloc, exec, uvmcopy data copy, ...).
+void *
+kalloc(void)
+{
+  void *p = kalloc_raw();
+  if(p)
+    return p;
+
+  p = swap_out();
+  if(p == 0){
+    printf("kalloc: out of memory\n");
+    return 0;
+  }
+  memset((char*)p, 5, PGSIZE);
+  return p;
 }
 
 /*AI was used (Claude - Anthropic)

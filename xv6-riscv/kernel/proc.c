@@ -115,6 +115,36 @@ allocpid()
   return pid;
 }
 
+/* AI was used (Claude - Anthropic)
+   Asked AI how to build a process page table from a trapframe pointer
+   before taking p->lock, so that the swap-capable kalloc() used for the
+   trapframe/page-table runs in a lock-free context (avoids "sched locks").
+*/
+// Like proc_pagetable, but takes the trapframe pointer directly so it can
+// run before p->lock is held.  Used only by allocproc().
+static pagetable_t
+proc_pagetable_tf(struct trapframe *tf)
+{
+  pagetable_t pagetable;
+
+  pagetable = uvmcreate();
+  if(pagetable == 0)
+    return 0;
+
+  if(mappages(pagetable, TRAMPOLINE, PGSIZE,
+              (uint64)trampoline, PTE_R | PTE_X) < 0){
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+  if(mappages(pagetable, TRAPFRAME, PGSIZE,
+              (uint64)tf, PTE_R | PTE_W) < 0){
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+  return pagetable;
+}
+
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
@@ -124,6 +154,19 @@ allocproc(void)
 {
   struct proc *p;
 
+  // Allocate trapframe + page table BEFORE taking p->lock, using the
+  // swap-capable kalloc().  No lock is held (noff==0), so if kalloc() runs
+  // swap_out() and sleeps on disk I/O it's safe.
+  struct trapframe *tf = (struct trapframe *)kalloc();
+  if(tf == 0)
+    return 0;
+
+  pagetable_t pt = proc_pagetable_tf(tf);
+  if(pt == 0){
+    kfree((void *)tf);
+    return 0;
+  }
+
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
@@ -132,6 +175,8 @@ allocproc(void)
       release(&p->lock);
     }
   }
+  proc_freepagetable(pt, 0);
+  kfree((void *)tf);
   return 0;
 
 found:
@@ -143,25 +188,9 @@ found:
   p->timeslice   = 5;
   p->is_eligible = 1;
 
+  p->trapframe = tf;
+  p->pagetable = pt;
 
-
-  // Allocate a trapframe page.
-  if((p->trapframe = (struct trapframe *)kalloc()) == 0){
-    freeproc(p);
-    release(&p->lock);
-    return 0;
-  }
-
-  // An empty user page table.
-  p->pagetable = proc_pagetable(p);
-  if(p->pagetable == 0){
-    freeproc(p);
-    release(&p->lock);
-    return 0;
-  }
-
-  // Set up new context to start executing at forkret,
-  // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
@@ -323,8 +352,16 @@ kfork(void)
     return -1;
   }
 
+  // allocproc() returned np with np->lock held.  uvmcopy() and the mmap
+  // copy below call kalloc(), which under memory pressure runs swap_out()
+  // -> swapwrite() and sleeps on disk I/O.  Sleeping while holding a
+  // spinlock triggers "sched locks", so release np->lock across the copy
+  // region and re-acquire it once memory work is done.
+  release(&np->lock);
+
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+    acquire(&np->lock);          // freeproc() expects the lock held
     freeproc(np);
     release(&np->lock);
     return -1;
@@ -362,6 +399,7 @@ kfork(void)
                      | (ma->prot & PROT_WRITE ? PTE_W : 0));
     }
   }
+  acquire(&np->lock);
   
 
   // copy saved user registers.

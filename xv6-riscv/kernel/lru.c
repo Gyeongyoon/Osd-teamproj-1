@@ -98,10 +98,10 @@ lru_add(pagetable_t pt, uint64 va, uint64 pa)
 
   acquire(&lru.lock);
 
-  // 이미 리스트에 있으면 먼저 떼어낸다 (tail로 재삽입 = freshness 갱신)
+  
   if(pg->pagetable != 0){
     if(pg->next == pg){
-      lru.head = 0;                 // 유일한 노드였음
+      lru.head = 0;           
     } else {
       pg->prev->next = pg->next;
       pg->next->prev = pg->prev;
@@ -114,10 +114,10 @@ lru_add(pagetable_t pt, uint64 va, uint64 pa)
   pg->pagetable = (uint64)pt;
   pg->vaddr     = va;
 
-  if(lru.head == 0){                // 빈 리스트
+  if(lru.head == 0){        
     pg->next = pg->prev = pg;
     lru.head = pg;
-  } else {                          // tail( = head->prev ) 뒤에 삽입
+  } else {               
     struct page *tail = lru.head->prev;
     tail->next     = pg;
     pg->prev       = tail;
